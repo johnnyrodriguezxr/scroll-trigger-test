@@ -66,3 +66,28 @@ Note: the gyroscope needs a secure context — on a phone use the Pages URL (HTT
 - [SparkJS](https://github.com/sparkjsdev/spark) (MIT) by World Labs
 - Demo splat scenes from [sparkjs.dev](https://sparkjs.dev/examples/)
 - Original concept: [Ian Curtis / @XRarchitect](https://x.com/XRarchitect)
+
+## Ink Box — companion page (`box.html`)
+
+The phone screen becomes the front pane of a sealed glass box holding a dark,
+viscous liquid (black ink / crude oil, ~40% full):
+
+**https://johnnyrodriguezxr.github.io/scroll-trigger-test/box.html**
+
+- **Off-axis "fish-tank window"**: the gyroscope quaternion moves a virtual eye
+  around the front pane, re-projecting the interior so rotating the phone lets
+  you look deeper into the box and see all five interior walls.
+- **Real physics**: a GPU shallow-water heightfield sim (ping-pong FBOs,
+  256×256, fixed timestep) driven by `DeviceMotion` — the effective gravity
+  vector from `accelerationIncludingGravity` tilts the resting plane, and
+  moving/shaking the phone injects momentum. Waves reflect off the walls,
+  interfere, and settle with tunable viscosity.
+- **Rendering**: Fresnel + analytic reflections of the box interior, sharp
+  procedural specular, refraction with Beer–Lambert absorption (opaque at
+  depth, faint blue-brown tint at grazing angles), meniscus, and caustic
+  shimmer at the waterline.
+- **iOS**: tap **Enable Motion** (`DeviceMotionEvent.requestPermission()` —
+  motion permission, not just orientation). **Desktop**: drag tilts the box,
+  double-click pokes the ink. Double-tap on mobile re-centers the view.
+- **Performance**: DPR capped at 2; the sim auto-degrades to 128×128 if frame
+  time stays above ~20 ms.

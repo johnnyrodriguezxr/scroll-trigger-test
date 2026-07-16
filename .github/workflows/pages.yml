@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - claude/gaussian-splat-ios-gyro-9jc8sg
+      - claude/gyro-liquid-box-x884h4
   workflow_dispatch:
 
 permissions:
