@@ -564,6 +564,11 @@ const sensor = {
   lastAt: -1e9,
   orientCount: 0,
   motionCount: 0,
+  // "level" reference: rotates the resting grip's gravity to straight-down so
+  // the liquid sits at the bottom of the SCREEN however the phone is held
+  gRef: new THREE.Quaternion(),
+  gRefSet: false,
+  activeAt: 0,
 };
 
 const _euler = new THREE.Euler();
@@ -656,9 +661,9 @@ canvas.addEventListener("pointerdown", (e) => {
   const now = performance.now();
   if (now - lastTap < 300) {
     splashAt(e.clientX, e.clientY);
-    if (gyroActive()) {
-      sensor.quatZero = sensor.quat.clone();
-      toast("View re-centered");
+    if (gyroActive() || motionActive()) {
+      captureLevel();
+      toast("Re-leveled");
     }
   }
   lastTap = now;
@@ -731,9 +736,11 @@ if (needsPermission) {
 // ---------------------------------------------------------------------------
 // Main loop: gravity → equilibrium plane, fixed-timestep sim, off-axis eye.
 // ---------------------------------------------------------------------------
-const gravity = new THREE.Vector3(0, -9.81, 0);   // smoothed effective gravity (box space)
+const gravity = new THREE.Vector3(0, -9.81, 0);   // re-leveled gravity used by the sim
+const gDev = new THREE.Vector3(0, -9.81, 0);      // smoothed gravity, raw device frame
 const gTarget = new THREE.Vector3(0, -9.81, 0);
 const accLP = new THREE.Vector3(0, 9.81, 0);      // low-passed raw accelerometer
+const DOWN = new THREE.Vector3(0, -1, 0);
 const slope = new THREE.Vector2(0, 0);            // smoothed plane gradient
 const slopePrev = new THREE.Vector2(0, 0);
 const eyeSmooth = new THREE.Vector3(0, 0, EYE_DIST);
@@ -747,8 +754,19 @@ let frameCount = 0;
 let slowFrames = 0;
 const clock = new THREE.Clock();
 
+// Anchor "level" to the current grip: from now on this pose means the liquid
+// rests flat at the bottom of the screen. Also re-anchors the eye.
+function captureLevel() {
+  _vTmp.copy(gDev).normalize();
+  sensor.gRef.setFromUnitVectors(_vTmp, DOWN);
+  sensor.gRefSet = true;
+  if (sensor.hasOrient) sensor.quatZero = sensor.quat.clone();
+}
+
 function updateGravity(dt) {
-  if (motionActive()) {
+  const useAcc = motionActive();
+  const useOri = !useAcc && gyroActive();
+  if (useAcc) {
     // auto-calibrate the accelerometer sign against orientation-derived
     // gravity (iOS historically reports the negated convention)
     accLP.lerp(sensor.accRaw, 1 - Math.exp(-dt / 0.4));
@@ -759,14 +777,27 @@ function updateGravity(dt) {
     }
     const sign = sensor.signAccum >= 0 ? 1 : -1;
     gTarget.copy(sensor.accRaw).multiplyScalar(-sign);
-  } else if (gyroActive()) {
+  } else if (useOri) {
     gTarget.set(0, -9.81, 0).applyQuaternion(_qTmp.copy(sensor.quat).invert());
   } else {
     _euler.set(drag.pitch, 0, drag.roll, "XYZ");
     _qTmp.setFromEuler(_euler).invert();
     gTarget.set(0, -9.81, 0).applyQuaternion(_qTmp);
   }
-  gravity.lerp(gTarget, 1 - Math.exp(-dt / ACC_TAU));
+  gDev.lerp(gTarget, 1 - Math.exp(-dt / ACC_TAU));
+
+  if (useAcc || useOri) {
+    if (!sensor.gRefSet) {
+      if (!sensor.activeAt) sensor.activeAt = performance.now();
+      if (performance.now() - sensor.activeAt > 600) captureLevel();
+      gravity.set(0, -gDev.length(), 0);   // hold level until the grip is anchored
+    } else {
+      gravity.copy(gDev).applyQuaternion(sensor.gRef);
+    }
+  } else {
+    sensor.activeAt = 0;
+    gravity.copy(gDev);
+  }
 }
 
 function updateSlope(dt) {
@@ -783,12 +814,15 @@ function updateSlope(dt) {
 }
 
 function updateEye(dt) {
+  // "Magic window" steering (matches the splat viewer's mental model): rotate
+  // the phone toward what you want to see — pan left reveals the left wall,
+  // recline the top away to peer down at the liquid surface.
   if (gyroActive() && sensor.quatZero) {
-    _qTmp.copy(sensor.quat).invert().multiply(sensor.quatZero);
+    _qTmp.copy(sensor.quatZero).invert().multiply(sensor.quat);
     eyeTarget.set(0, 0, EYE_DIST).applyQuaternion(_qTmp);
   } else {
     _euler.set(drag.pitch, drag.yaw, 0, "YXZ");
-    _qTmp.setFromEuler(_euler).invert();
+    _qTmp.setFromEuler(_euler);
     eyeTarget.set(0, 0, EYE_DIST).applyQuaternion(_qTmp);
   }
   eyeTarget.x = THREE.MathUtils.clamp(eyeTarget.x, -EYE_DIST, EYE_DIST);

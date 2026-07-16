@@ -87,7 +87,10 @@ viscous liquid (black ink / crude oil, ~40% full):
   depth, faint blue-brown tint at grazing angles), meniscus, and caustic
   shimmer at the waterline.
 - **iOS**: tap **Enable Motion** (`DeviceMotionEvent.requestPermission()` —
-  motion permission, not just orientation). **Desktop**: drag tilts the box,
-  double-click pokes the ink. Double-tap on mobile re-centers the view.
+  motion permission, not just orientation). Your resting grip is auto-leveled
+  (~0.6 s after sensors start), so the liquid sits at the bottom of the screen
+  however you hold the phone; rotate the phone toward what you want to see.
+  **Desktop**: drag tilts the box, double-click pokes the ink. Double-tap on
+  mobile re-levels + re-centers.
 - **Performance**: DPR capped at 2; the sim auto-degrades to 128×128 if frame
   time stays above ~20 ms.
